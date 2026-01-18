@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CriccSojeeb Stream Recorder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  margin:0;
+  background:#0b0b0b;
+  color:#fff;
+  font-family:Arial;
+}
+.header{
+  background:#111;
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
+  font-size:18px;
+}
+.container{
+  padding:10px;
+}
+input,button{
+  width:100%;
+  padding:12px;
+  margin-top:6px;
+  border-radius:6px;
+  border:none;
+}
+button{
+  background:#ff2d55;
+  color:#fff;
+  font-size:15px;
+}
+
+/* VIDEO */
+.video-box{
+  position:relative;
+  margin-top:10px;
+}
+video{
+  width:100%;
+  background:#000;
+  border-radius:8px;
+}
+
+/* 🔥 WATERMARK */
+.watermark{
+  position:absolute;
+  top:10px;
+  right:12px;
+  font-size:14px;
+  font-weight:bold;
+  letter-spacing:1px;
+  color:rgba(255,255,255,0.85);
+  background:rgba(0,0,0,0.45);
+  padding:5px 10px;
+  border-radius:4px;
+  z-index:6;
+  animation:wmFade 3s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes wmFade{
+  0%{opacity:0.4; box-shadow:0 0 0 rgba(255,255,255,0);}
+  50%{opacity:1; box-shadow:0 0 12px rgba(255,255,255,0.4);}
+  100%{opacity:0.4; box-shadow:0 0 0 rgba(255,255,255,0);}
+}
+
+/* RECORD BUTTON */
+.record-btn{
+  position:absolute;
+  bottom:15px;
+  right:15px;
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  background:red;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:bold;
+  cursor:pointer;
+  z-index:5;
+}
+.recording{
+  animation:pulse 1s infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(255,0,0,.7);}
+  70%{box-shadow:0 0 0 15px rgba(255,0,0,0);}
+  100%{box-shadow:0 0 0 0 rgba(255,0,0,0);}
+}
+
+/* TIMER */
+.timer{
+  position:absolute;
+  bottom:20px;
+  left:15px;
+  background:rgba(0,0,0,.6);
+  padding:5px 10px;
+  border-radius:4px;
+  font-size:14px;
+  display:none;
+  z-index:5;
+}
+
+/* TELEGRAM POPUP */
+.popup{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.7);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+}
+.popup-box{
+  background:#111;
+  padding:20px;
+  border-radius:10px;
+  text-align:center;
+  width:85%;
+  max-width:320px;
+}
+.popup-box a{
+  display:block;
+  background:#0088cc;
+  color:#fff;
+  padding:12px;
+  border-radius:6px;
+  text-decoration:none;
+  margin-top:10px;
+}
+.close{
+  margin-top:10px;
+  color:#aaa;
+  cursor:pointer;
+}
+
+/* BOTTOM JOIN */
+.bottom-join{
+  position:fixed;
+  bottom:0;
+  left:0;
+  width:100%;
+  background:#0088cc;
+  text-align:center;
+  padding:12px;
+}
+.bottom-join a{
+  color:#fff;
+  font-weight:bold;
+  text-decoration:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">CriccSojeeb Stream Recorder</div>
+
+<div class="container">
+  <input id="url" placeholder="Paste m3u8 link here">
+  <button onclick="loadStream()">▶ PLAY STREAM</button>
+
+  <div class="video-box">
+    <div class="watermark">CriccSojeeb</div>
+
+    <video id="video" controls playsinline></video>
+
+    <div class="timer" id="timer">00:00</div>
+    <div class="record-btn" id="recBtn" onclick="toggleRec()">REC</div>
+  </div>
+</div>
+
+<!-- TELEGRAM POPUP -->
+<div class="popup" id="popup">
+  <div class="popup-box">
+    <h3>Join Our Telegram</h3>
+    <p>Live streams & updates only on Telegram</p>
+    <a href="https://t.me/CriccSojeeb" target="_blank">Join Telegram</a>
+    <div class="close" onclick="closePopup()">Close</div>
+  </div>
+</div>
+
+<!-- BOTTOM JOIN -->
+<div class="bottom-join">
+  <a href="https://t.me/CriccSojeeb" target="_blank">📢 Join Our Telegram Channel</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+let video=document.getElementById("video");
+let recBtn=document.getElementById("recBtn");
+let timerEl=document.getElementById("timer");
+let popup=document.getElementById("popup");
+
+let recorder,chunks=[];
+let recording=false;
+let sec=0,timerInt;
+
+function loadStream(){
+  let url=document.getElementById("url").value;
+  if(Hls.isSupported()){
+    let hls=new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+  }else{
+    video.src=url;
+  }
+  video.play();
+}
+
+function toggleRec(){
+  recording?stopRec():startRec();
+}
+
+function startRec(){
+  chunks=[];
+  sec=0;
+  timerEl.style.display="block";
+  let stream=video.captureStream();
+  recorder=new MediaRecorder(stream,{
+    mimeType:"video/webm;codecs=vp9",
+    videoBitsPerSecond:8000000
+  });
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.start();
+
+  timerInt=setInterval(()=>{
+    sec++;
+    let m=String(Math.floor(sec/60)).padStart(2,"0");
+    let s=String(sec%60).padStart(2,"0");
+    timerEl.innerText=`${m}:${s}`;
+  },1000);
+
+  recording=true;
+  recBtn.innerText="STOP";
+  recBtn.classList.add("recording");
+}
+
+function stopRec(){
+  recorder.stop();
+  clearInterval(timerInt);
+  timerEl.style.display="none";
+
+  recorder.onstop=()=>{
+    let blob=new Blob(chunks,{type:"video/webm"});
+    let d=new Date();
+    let name=`CriccSojeeb_${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}_${d.getHours()}-${d.getMinutes()}-${d.getSeconds()}.webm`;
+    let a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=name;
+    a.click();
+  };
+
+  recording=false;
+  recBtn.innerText="REC";
+  recBtn.classList.remove("recording");
+}
+
+function closePopup(){
+  popup.style.display="none";
+}
+</script>
+
+</body>
+</html>

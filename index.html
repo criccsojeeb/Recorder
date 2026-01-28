@@ -3,118 +3,136 @@
 <head>
 <meta charset="UTF-8">
 <title>CriccSojeeb Stream Recorder</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 <style>
 body {
-  background:#0f172a;
-  color:#fff;
+  margin: 0;
+  background: #000;
+  color: #fff;
   font-family: Arial, sans-serif;
-  text-align:center;
-  padding:20px;
+  text-align: center;
 }
-input, button {
-  padding:10px;
-  margin:5px;
-  border-radius:6px;
-  border:none;
-}
-button {
-  background:#22c55e;
-  color:#000;
-  font-weight:bold;
-}
+
 video {
-  width:100%;
-  max-width:720px;
-  margin-top:15px;
-  background:#000;
-}
-#timer {
-  margin-top:10px;
-  font-size:18px;
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
 }
 
 /* Watermark */
 #watermark {
-  position:absolute;
-  top:10px;
-  right:10px;
-  font-weight:bold;
-  font-size:20px;
-  animation: glow 2s infinite alternate;
-  pointer-events:none;
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  font-size: 22px;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+  opacity: 0.8;
+  z-index: 999;
 }
-@keyframes glow {
-  from {opacity:0.4;}
-  to {opacity:1;}
+@keyframes pulse {
+  0% { text-shadow: 0 0 5px red; }
+  100% { text-shadow: 0 0 15px yellow; }
 }
 
-/* Telegram popup */
+/* Buttons */
+button {
+  padding: 10px 15px;
+  margin: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+#timer {
+  font-size: 18px;
+  color: #0f0;
+  margin-top: 5px;
+}
+
+/* Telegram Popup */
 #popup {
-  position:fixed;
-  top:0; left:0;
-  width:100%; height:100%;
-  background:rgba(0,0,0,0.8);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:999;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 #popup div {
-  background:#020617;
-  padding:20px;
-  border-radius:10px;
+  background: #111;
+  padding: 20px;
+  border-radius: 10px;
+}
+#popup a {
+  display: block;
+  margin-top: 10px;
+  background: #0088cc;
+  color: #fff;
+  padding: 10px;
+  text-decoration: none;
+  border-radius: 5px;
+}
+
+/* Bottom Join */
+#bottomJoin {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background: #0088cc;
+  padding: 10px;
+}
+#bottomJoin a {
+  color: #fff;
+  font-weight: bold;
+  text-decoration: none;
 }
 </style>
 </head>
 
 <body>
 
+<!-- Telegram Popup -->
 <div id="popup">
   <div>
-    <h2>Join Telegram First</h2>
-    <a href="https://t.me/CriccSojeeb" target="_blank">
-      <button>Join @CriccSojeeb</button>
-    </a><br><br>
+    <h3>Join Our Telegram</h3>
+    <a href="https://t.me/CriccSojeeb" target="_blank">Join @CriccSojeeb</a>
     <button onclick="closePopup()">Continue</button>
   </div>
 </div>
 
-<h1>CriccSojeeb Stream Recorder</h1>
+<div id="watermark">CriccSojeeb</div>
 
-<input id="url" placeholder="Paste m3u8 link here" size="40"><br>
-<button onclick="loadStream()">Play</button>
-<button onclick="startRec()">Record</button>
-<button onclick="stopRec()">Stop</button>
+<h2>CriccSojeeb Stream Recorder</h2>
+
+<input id="m3u8" placeholder="Paste m3u8 link here" style="width:90%">
+<br>
+<button onclick="loadStream()">▶ Play Stream</button>
+
+<video id="video" controls playsinline></video>
+
+<div>
+  <button onclick="startRecord()">⏺ Start Record</button>
+  <button onclick="stopRecord()">⏹ Stop Record</button>
+</div>
 
 <div id="timer">00:00</div>
 
-<div style="position:relative; display:inline-block;">
-  <video id="video" controls autoplay playsinline></video>
-  <div id="watermark">CriccSojeeb</div>
+<div id="bottomJoin">
+  <a href="https://t.me/CriccSojeeb" target="_blank">Join Telegram @CriccSojeeb</a>
 </div>
 
 <script>
-let mediaRecorder;
-let chunks = [];
-let startTime;
-let timerInt;
+/* Player */
+let hls;
+function loadStream() {
+  const video = document.getElementById('video');
+  const url = m3u8.value.trim();
 
-function closePopup(){
-  document.getElementById("popup").style.display="none";
-}
-
-function loadStream(){
-  const video = document.getElementById("video");
-  const url = document.getElementById("url").value;
-
-  if(Hls.isSupported()){
-    const hls = new Hls({
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
+  if (Hls.isSupported()) {
+    hls = new Hls({
+      enableWorker: true,
       lowLatencyMode: false
     });
     hls.loadSource(url);
@@ -124,46 +142,50 @@ function loadStream(){
   }
 }
 
-function startRec(){
-  chunks=[];
-  const stream = document.getElementById("video").captureStream(60);
+/* Recorder */
+let recorder, chunks = [];
+let seconds = 0, timerInt;
 
-  mediaRecorder = new MediaRecorder(stream, {
+function startRecord() {
+  const stream = video.captureStream();
+  recorder = new MediaRecorder(stream, {
     mimeType: 'video/webm;codecs=vp9',
-    videoBitsPerSecond: 8000000
+    videoBitsPerSecond: 6000000,
+    audioBitsPerSecond: 192000
   });
 
-  mediaRecorder.ondataavailable = e => chunks.push(e.data);
+  recorder.ondataavailable = e => chunks.push(e.data);
+  recorder.onstop = saveVideo;
 
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(chunks, {type:'video/webm'});
-    const a = document.createElement("a");
-    const name = "CriccSojeeb_" + Date.now() + ".webm";
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-  };
-
-  mediaRecorder.start();
-  startTimer();
+  recorder.start();
+  seconds = 0;
+  timerInt = setInterval(updateTimer, 1000);
 }
 
-function stopRec(){
-  if(mediaRecorder) mediaRecorder.stop();
-  stopTimer();
-}
-
-function startTimer(){
-  startTime = Date.now();
-  timerInt = setInterval(()=>{
-    let diff = Math.floor((Date.now()-startTime)/1000);
-    let m = String(Math.floor(diff/60)).padStart(2,'0');
-    let s = String(diff%60).padStart(2,'0');
-    document.getElementById("timer").innerText = `${m}:${s}`;
-  },1000);
-}
-function stopTimer(){
+function stopRecord() {
+  if (recorder) recorder.stop();
   clearInterval(timerInt);
+}
+
+function updateTimer() {
+  seconds++;
+  const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  timer.innerText = `${m}:${s}`;
+}
+
+function saveVideo() {
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  chunks = [];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `CriccSojeeb_${new Date().toISOString().replace(/[:.]/g,'-')}.webm`;
+  a.click();
+}
+
+/* Popup */
+function closePopup() {
+  popup.style.display = "none";
 }
 </script>
 
